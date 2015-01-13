@@ -1,6 +1,7 @@
 package runconfig
 
 import (
+	"net"
 	"strings"
 
 	"github.com/docker/docker/engine"
@@ -96,6 +97,7 @@ type HostConfig struct {
 	CapDrop         []string
 	RestartPolicy   RestartPolicy
 	SecurityOpt     []string
+	IpConfig        IpConfig
 }
 
 // This is used by the create command when you want to set both the
@@ -110,6 +112,16 @@ func MergeConfigs(config *Config, hostConfig *HostConfig) *ConfigAndHostConfig {
 		*config,
 		*hostConfig,
 	}
+}
+
+type IpConfig struct {
+	Bridge string
+	Interface string
+	Address net.IP
+	Netmask int
+	DefaultRoute string
+	Dhcp bool
+	DhcpIdentifier string
 }
 
 func ContainerHostConfigFromJob(job *engine.Job) *HostConfig {

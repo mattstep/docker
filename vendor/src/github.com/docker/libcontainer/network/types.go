@@ -41,6 +41,9 @@ type Network struct {
 	// container's interfaces if a pair is created, specifically in the case of type veth
 	// Note: This does not apply to loopback interfaces.
 	TxQueueLen int `json:"txqueuelen,omitempty"`
+
+    // Enable DHCP client for the container
+    Dhcp bool `json:"dhcp"`
 }
 
 // Struct describing the network specific runtime state that will be maintained by libcontainer for all running containers
@@ -52,4 +55,8 @@ type NetworkState struct {
 	VethChild string `json:"veth_child,omitempty"`
 	// Net namespace path.
 	NsPath string `json:"ns_path,omitempty"`
+	// pid for the network namespace
+	NsPID int `json:"ns_pid,omitempty"`
+	// The assigned ip from dhcp to VethChild
+	VethChildDhcpIp string `json:"veth_child_dhcp_ip"`
 }

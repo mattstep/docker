@@ -221,6 +221,7 @@ func populateCommand(c *Container, env []string) error {
 				IPAddress:   network.IPAddress,
 				IPPrefixLen: network.IPPrefixLen,
 				MacAddress:  network.MacAddress,
+				Dhcp:        network.Dhcp,
 			}
 		}
 	case "container":
@@ -471,6 +472,26 @@ func (container *Container) buildHostnameAndHostsFiles(IP string) error {
 func (container *Container) AllocateNetwork() error {
 	mode := container.hostConfig.NetworkMode
 	if container.Config.NetworkDisabled || !mode.IsPrivate() {
+		return nil
+	}
+
+    if container.hostConfig.IpConfig.Bridge != "" {
+		container.NetworkSettings.Bridge = container.hostConfig.IpConfig.Bridge
+    } else {
+		container.NetworkSettings.Bridge = container.daemon.config.BridgeIface
+    }
+
+	if container.hostConfig.IpConfig.Dhcp {
+		container.NetworkSettings.Dhcp = true
+		container.NetworkSettings.IPAddress = "0.0.0.0"
+		container.NetworkSettings.IPPrefixLen = 0
+		return nil
+	}
+
+	if container.hostConfig.IpConfig.Address != nil {
+		container.NetworkSettings.IPAddress = container.hostConfig.IpConfig.Address.String()
+		container.NetworkSettings.IPPrefixLen = container.hostConfig.IpConfig.Netmask
+		container.NetworkSettings.Gateway = container.hostConfig.IpConfig.DefaultRoute
 		return nil
 	}
 

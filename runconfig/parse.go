@@ -2,6 +2,7 @@ package runconfig
 
 import (
 	"fmt"
+	"net"
 	"path"
 	"strconv"
 	"strings"
@@ -21,6 +22,8 @@ var (
 	ErrConflictNetworkHostname          = fmt.Errorf("Conflicting options: -h and the network mode (--net)")
 	ErrConflictHostNetworkAndDns        = fmt.Errorf("Conflicting options: --net=host can't be used with --dns. This configuration is invalid.")
 	ErrConflictHostNetworkAndLinks      = fmt.Errorf("Conflicting options: --net=host can't be used with links. This would result in undefined behavior.")
+	ErrConflictIpAndLinks               = fmt.Errorf("Conflicting options: --ipv4 or --ipv6 can't be used with links. This would result in undefined behavior.")
+	ErrConflictIpAndPublish             = fmt.Errorf("Conflicting options: --ipv4 or --ipv6 can't be used with published ports.")
 )
 
 func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSet, error) {
@@ -43,6 +46,7 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 		flCapAdd      = opts.NewListOpts(nil)
 		flCapDrop     = opts.NewListOpts(nil)
 		flSecurityOpt = opts.NewListOpts(nil)
+		flIpv4        = opts.NewListOpts(nil)
 
 		flNetwork         = cmd.Bool([]string{"#n", "#-networking"}, true, "Enable networking for this container")
 		flPrivileged      = cmd.Bool([]string{"#privileged", "-privileged"}, false, "Give extended privileges to this container")
@@ -83,6 +87,8 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 	cmd.Var(&flCapDrop, []string{"-cap-drop"}, "Drop Linux capabilities")
 	cmd.Var(&flSecurityOpt, []string{"-security-opt"}, "Security Options")
 
+	cmd.Var(&flIpv4, []string{"-ipv4"}, "Configures an IPv4 Interface for the container. Format is \"[<bridge-name>:]dhcp | [<bridge-name>:]<ipv4-address>/<netmask>[,<default-route>]\".")
+
 	if err := cmd.Parse(args); err != nil {
 		return nil, nil, cmd, err
 	}
@@ -98,12 +104,82 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 		attachStderr = flAttach.Get("stderr")
 	)
 
-	if *flNetMode != "bridge" && *flNetMode != "none" && *flHostname != "" {
-		return nil, nil, cmd, ErrConflictNetworkHostname
-	}
+	//
+	// Networking. Here we go.
+	//
+	ipConfig := &IpConfig{}
 
-	if *flNetMode == "host" && flLinks.Len() > 0 {
-		return nil, nil, cmd, ErrConflictHostNetworkAndLinks
+	if flIpv4.Len() > 0 {
+		if flLinks.Len() > 0 {
+			return nil, nil, cmd, ErrConflictIpAndLinks
+		}
+
+		if flPublish.Len() > 0 || *flPublishAll {
+			return nil, nil, cmd, ErrConflictIpAndPublish
+		}
+
+		for _, i := range flIpv4.GetAll() {
+			ipv4Ints := strings.Split(strings.TrimSpace(i), ";")
+			for _, j := range ipv4Ints {
+
+				// [<interface>=]...stanza...
+				ifaceStanza := strings.SplitN(strings.TrimSpace(j), "=", 2)
+				if (len(ifaceStanza) > 1) {
+					ipConfig.Interface = ifaceStanza[0]
+				}
+
+				// [<bridge>:]...stanza...
+				nextValue := strings.TrimSpace(ifaceStanza[len(ifaceStanza)-1])
+				bridgeStanza := strings.SplitN(nextValue, ":", 2)
+				if (len(bridgeStanza) > 1) {
+					ipConfig.Bridge = bridgeStanza[0]
+				}
+
+				nextValue = strings.TrimSpace(bridgeStanza[len(bridgeStanza)-1])
+				if strings.HasPrefix(nextValue, "dhcp") {
+					ipConfig.Dhcp = true
+					dhcpStanza := strings.SplitN(nextValue, "-", 2)
+					if (len(dhcpStanza) > 1) {
+						ipConfig.DhcpIdentifier = dhcpStanza[1]
+					}
+				} else {
+					// <ip-addr>[/netmask][,default-route]
+					routeStanza := strings.Split(nextValue, ",")
+					if (len(routeStanza) > 1) {
+						ipConfig.DefaultRoute = routeStanza[1]
+					}
+
+					// <ip-addr>[/netmask]
+					nextValue = strings.TrimSpace(routeStanza[0])
+					fmt.Printf("%V\n", nextValue)
+					if strings.Contains(nextValue, "/") {
+						if ip, ipnet, err := net.ParseCIDR(nextValue); err != nil {
+							return nil, nil, cmd, err
+						} else {
+							ipConfig.Address = ip
+							ipConfig.Netmask, _ = ipnet.Mask.Size()
+							fmt.Printf("%V\n", ipnet)
+						}
+					} else {
+						if ip := net.ParseIP(nextValue); ip == nil {
+							return nil, nil, cmd, fmt.Errorf("Ip format invalid")
+						} else {
+							ipConfig.Address = ip
+						}
+					}
+				}
+			}
+		}
+
+	} else {
+
+		if *flNetMode != "bridge" && *flNetMode != "none" && *flHostname != "" {
+			return nil, nil, cmd, ErrConflictNetworkHostname
+		}
+
+		if *flNetMode == "host" && flLinks.Len() > 0 {
+			return nil, nil, cmd, ErrConflictHostNetworkAndLinks
+		}
 	}
 
 	if *flNetMode == "container" && flLinks.Len() > 0 {
@@ -294,6 +370,7 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 		CapDrop:         flCapDrop.GetAll(),
 		RestartPolicy:   restartPolicy,
 		SecurityOpt:     flSecurityOpt.GetAll(),
+		IpConfig:        *ipConfig,
 	}
 
 	// When allocating stdin in attached mode, close stdin at client disconnect

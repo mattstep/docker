@@ -7,6 +7,8 @@ import (
 
 	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libcontainer/utils"
+	"strconv"
+	"os/exec"
 )
 
 // Veth is a network strategy that uses a bridge and creates
@@ -47,6 +49,8 @@ func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
 	}
 	networkState.VethHost = name1
 	networkState.VethChild = name2
+
+	networkState.NsPID = nspid
 
 	return nil
 }
@@ -92,6 +96,17 @@ func (v *Veth) Initialize(config *Network, networkState *NetworkState) error {
 			return fmt.Errorf("set gateway for ipv6 to %s on device %s failed with %s", config.IPv6Gateway, defaultDevice, err)
 		}
 	}
+
+	if config.Dhcp {
+		pidstr := strconv.Itoa(networkState.NsPID)
+		cmd := exec.Command("ip", "netns", "exec", pidstr, "dhclient", "-4", "-pf",
+			"/var/run/dhclient-" + pidstr + ".pid", "-lf", "/var/lib/dhclient/" + pidstr + ".lease", defaultDevice)
+		err := cmd.Run()
+		if err != nil {
+			fmt.Errorf("Was not able to start dhclient")
+		}
+	}
+
 	return nil
 }
 

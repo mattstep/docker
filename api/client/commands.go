@@ -1645,7 +1645,7 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 
 	w := tabwriter.NewWriter(cli.out, 20, 1, 3, ' ', 0)
 	if !*quiet {
-		fmt.Fprint(w, "CONTAINER ID\tIMAGE\tCOMMAND\tCREATED\tSTATUS\tPORTS\tNAMES")
+		fmt.Fprint(w, "CONTAINER ID\tIMAGE\tCOMMAND\tCREATED\tSTATUS\tPORTS\tNAMES\tIPADDRESS")
 
 		if *size {
 			fmt.Fprintln(w, "\tSIZE")
@@ -1696,9 +1696,9 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 
 		ports.ReadListFrom([]byte(out.Get("Ports")))
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s ago\t%s\t%s\t%s\t", outID, out.Get("Image"), outCommand,
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s ago\t%s\t%s\t%s\t%s\t", outID, out.Get("Image"), outCommand,
 			units.HumanDuration(time.Now().UTC().Sub(time.Unix(out.GetInt64("Created"), 0))),
-			out.Get("Status"), api.DisplayablePorts(ports), strings.Join(outNames, ","))
+			out.Get("Status"), api.DisplayablePorts(ports), strings.Join(outNames, ","), out.Get("IPAddress"))
 
 		if *size {
 			if out.GetInt("SizeRootFs") > 0 {

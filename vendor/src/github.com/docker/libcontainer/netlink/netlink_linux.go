@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"unsafe"
+	"strconv"
 )
 
 const (
@@ -662,6 +663,8 @@ func networkSetNsAction(iface *net.Interface, rtattr *RtAttr) error {
 // Move a particular network interface to a particular network namespace
 // specified by PID. This is idential to running: ip link set dev $name netns $pid
 func NetworkSetNsPid(iface *net.Interface, nspid int) error {
+	os.MkdirAll("/var/run/netns", os.ModeDir | 0644)
+	os.Symlink("/proc/" + strconv.Itoa(nspid) + "/ns/net", "/var/run/netns/" + strconv.Itoa(nspid))
 	data := uint32Attr(syscall.IFLA_NET_NS_PID, uint32(nspid))
 	return networkSetNsAction(iface, data)
 }

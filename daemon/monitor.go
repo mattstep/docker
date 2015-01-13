@@ -5,6 +5,10 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+	"strconv"
+	"strings"
+	"fmt"
+	"os"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
@@ -134,6 +138,33 @@ func (m *containerMonitor) Start() error {
 
 		m.lastStartTime = time.Now()
 
+		go func() {
+			c := m.container.command
+			for i := 0; i < 120; i++ {
+				if c.ProcessConfig.Process != nil {
+					pid := strconv.Itoa(c.ProcessConfig.Process.Pid)
+
+					cmd := exec.Command("ip", "netns", "exec", pid, "ip", "-4", "-o", "addr", "show", "eth0")
+					out, _ := cmd.CombinedOutput()
+					outString := string(out)
+
+					if strings.Contains(outString, "inet") {
+						inetStringIndex := strings.Index(outString, "inet")
+						sansInetString := strings.TrimSpace(outString[inetStringIndex+5:])
+						firstSpaceInSansInetString := strings.Index(sansInetString, " ")
+
+						ipString := strings.TrimSpace(sansInetString[:firstSpaceInSansInetString])
+
+						fmt.Printf("Output from ip addr: %v\n", ipString)
+						m.container.NetworkSettings.IPAddress = strings.Split(ipString,"/")[0]
+						m.container.NetworkSettings.IPPrefixLen, _ = strconv.Atoi(strings.Split(ipString,"/")[1])
+						break
+					}
+				}
+				time.Sleep(time.Second)
+	    	}
+		}()
+
 		if exitStatus, err = m.container.daemon.Run(m.container, pipes, m.callback); err != nil {
 			// if we receive an internal error from the initial start of a container then lets
 			// return it instead of entering the restart loop
@@ -145,6 +176,12 @@ func (m *containerMonitor) Start() error {
 			}
 
 			log.Errorf("Error running container: %s", err)
+		}
+
+		// Remove network namespace
+		if m.container.command.ProcessConfig.Process != nil {
+			pid := strconv.Itoa(m.container.command.ProcessConfig.Process.Pid)
+			defer os.Remove("/var/run/netns/" + pid)
 		}
 
 		// here container.Lock is already lost

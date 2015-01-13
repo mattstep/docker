@@ -83,6 +83,7 @@ type NetworkInterface struct {
 	IPPrefixLen int    `json:"ip_prefix_len"`
 	MacAddress  string `json:"mac_address"`
 	Bridge      string `json:"bridge"`
+	Dhcp        bool   `json:"dhcp"`
 }
 
 type Resources struct {

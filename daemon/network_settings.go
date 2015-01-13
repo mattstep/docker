@@ -16,6 +16,7 @@ type NetworkSettings struct {
 	Bridge      string
 	PortMapping map[string]PortMapping // Deprecated
 	Ports       nat.PortMap
+	Dhcp        bool
 }
 
 func (settings *NetworkSettings) PortMappingAPI() *engine.Table {

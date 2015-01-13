@@ -144,6 +144,7 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 			out.SetInt64("SizeRw", sizeRw)
 			out.SetInt64("SizeRootFs", sizeRootFs)
 		}
+		out.Set("IPAddress", container.NetworkSettings.IPAddress + "/" + strconv.Itoa(container.NetworkSettings.IPPrefixLen))
 		outs.Add(out)
 		return nil
 	}

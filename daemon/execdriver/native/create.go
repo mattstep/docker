@@ -104,6 +104,7 @@ func (d *driver) createNetwork(container *libcontainer.Config, c *execdriver.Com
 			Type:       "veth",
 			Bridge:     c.Network.Interface.Bridge,
 			VethPrefix: "veth",
+			Dhcp:       c.Network.Interface.Dhcp,
 		}
 		container.Networks = append(container.Networks, &vethNetwork)
 	}
